@@ -6,16 +6,18 @@ import {
   useWindowDimensions,
 } from "react-native";
 import React, { useRef, useMemo, useState, useEffect } from "react";
-import BottomSheet from "@gorhom/bottom-sheet";
+import BottomSheet, { BottomSheetFlatList } from "@gorhom/bottom-sheet";
 import { FontAwesome5, Fontisto, Ionicons } from "@expo/vector-icons";
 import styles from "./styles";
-import orders from "../../../assets/data/orders.json";
-const order = orders[0];
+
 import * as Location from "expo-location";
 import MapView, { Marker } from "react-native-maps";
 import MapViewDirections from "react-native-maps-directions";
 import { Entypo, MaterialIcons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
+
+import { DataStore } from "aws-amplify/datastore";
+import { Dish, Order, OrderDish, Restaurant, User } from "../../models";
 
 const ORDER_STATUS = {
   READY_FOR_PICKUP: "READY_FOR_PICKUP",
@@ -23,17 +25,15 @@ const ORDER_STATUS = {
   PICKED_UP: "PICKED_UP",
 };
 
-const restaurantLocation = {
-  latitude: order.Restaurant.lat,
-  longitude: order.Restaurant.lng,
-};
-const deliveryLocation = {
-  latitude: order.User.lat,
-  longitude: order.User.lng,
-};
-
 const OrderDelivery = () => {
   const navigation = useNavigation();
+  const route = useRoute();
+  const id = route.params?.id;
+
+  const [order, setOrder] = useState(null);
+  const [user, setUser] = useState(null);
+  const [restaurant, setRestaurant] = useState(null);
+  const [dishItems, setDishItems] = useState([]);
 
   const [driverLocation, setDriverLocation] = useState(null);
   const [totalMinutes, setTotalMinutes] = useState(null);
@@ -51,17 +51,53 @@ const OrderDelivery = () => {
   const { height, width } = useWindowDimensions();
 
   useEffect(() => {
-    (async () => {
-      let { status } = await Location.requestBackgroundPermissionsAsync();
-      if (!status) {
-        console.log("Permission revoked");
-        return;
-      }
-      let location = await Location.getCurrentPositionAsync();
-      setDriverLocation({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
+    if (!id) return;
+    DataStore.query(Order, id).then(setOrder);
+  }, [id]);
+
+  useEffect(() => {
+    if (!order) return;
+    DataStore.query(User, order.userID).then(setUser);
+    DataStore.query(Restaurant, order.restaurantID).then(setRestaurant);
+    const fetchDishItems = async () => {
+      //Fetching the order dishes of the order
+      const orderDishes = await DataStore.query(OrderDish, (od) =>
+        od.orderID.eq(order.id)
+      );
+
+      //Now for each dish querying for the dish from id got from orderDish
+      const dishPromises = orderDishes.map(async (orderDish) => {
+        const dish = await DataStore.query(Dish, orderDish.dishID);
+        //returning the dish with the quantity
+        return { dish, quantity: orderDish.quantity };
       });
+      //get all the dish items with the order quantity
+      const resolvedDishes = await Promise.all(dishPromises);
+      setDishItems(resolvedDishes);
+    };
+    fetchDishItems();
+  }, [order]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (!status) {
+          console.log("Permission revoked");
+          return;
+        }
+        let location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+          enableHighAccuracy: true,
+          timeInterval: 5,
+        });
+        setDriverLocation({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+      } catch (e) {
+        console.log("Error fetch location: ", e);
+      }
     })();
 
     const foregroundSubscription = async () =>
@@ -79,12 +115,6 @@ const OrderDelivery = () => {
       );
     return foregroundSubscription;
   }, []);
-
-  if (!driverLocation) {
-    return (
-      <ActivityIndicator size={"large"} color={"black"} style={{ flex: 1 }} />
-    );
-  }
 
   const onButtonPressed = () => {
     if (deliveryStatus === ORDER_STATUS.READY_FOR_PICKUP) {
@@ -142,6 +172,23 @@ const OrderDelivery = () => {
     return true;
   };
 
+  const restaurantLocation = {
+    latitude: restaurant?.lat,
+    longitude: restaurant?.lng,
+  };
+
+  const deliveryLocation = {
+    latitude: user?.lat,
+    longitude: user?.lng,
+  };
+
+  console.log("Dish item: ", dishItems);
+  if (!driverLocation || !order) {
+    return (
+      <ActivityIndicator size={"large"} color={"black"} style={{ flex: 1 }} />
+    );
+  }
+
   return (
     <View style={styles.container}>
       <MapView
@@ -179,12 +226,9 @@ const OrderDelivery = () => {
           }}
         />
         <Marker
-          coordinate={{
-            latitude: order.Restaurant.lat,
-            longitude: order.Restaurant.lng,
-          }}
-          title={order.Restaurant.name}
-          description={order.Restaurant.address}
+          coordinate={restaurantLocation}
+          title={restaurant.name}
+          description={restaurant.address}
         >
           <View
             style={{ backgroundColor: "green", padding: 5, borderRadius: 20 }}
@@ -194,9 +238,9 @@ const OrderDelivery = () => {
         </Marker>
 
         <Marker
-          coordinate={{ latitude: order.User.lat, longitude: order.User.lng }}
-          title={order.User.name}
-          description={order.User.address}
+          coordinate={deliveryLocation}
+          title={user.name}
+          description={user.address}
         >
           <View
             style={{ backgroundColor: "green", padding: 5, borderRadius: 20 }}
@@ -235,23 +279,25 @@ const OrderDelivery = () => {
         </View>
         <View style={styles.deliveryDetailContainer}>
           <Text style={{ fontSize: 25, letterSpacing: 1, paddingVertical: 20 }}>
-            {orders[0].Restaurant.name}
+            {restaurant.name}
           </Text>
           <View style={styles.addressContainer}>
             <Fontisto name="shopping-store" size={22} color={"grey"} />
-            <Text style={styles.addressText}>
-              {orders[0].Restaurant.address}
-            </Text>
+            <Text style={styles.addressText}>{restaurant.address}</Text>
           </View>
           <View style={styles.addressContainer}>
             <FontAwesome5 name="map-marker-alt" size={30} color={"grey"} />
-            <Text style={styles.addressText}>{orders[0].User.address}</Text>
+            <Text style={styles.addressText}>{user.address}</Text>
           </View>
           <View style={styles.orderDetailContainer}>
-            <Text style={styles.orderItemText}>Onion Kings x1</Text>
-            <Text style={styles.orderItemText}>Big Kings x1</Text>
-            <Text style={styles.orderItemText}>Big Taasty x1</Text>
-            <Text style={styles.orderItemText}>Coca Cola x2</Text>
+            <BottomSheetFlatList
+              data={dishItems}
+              renderItem={({ item }) => (
+                <Text style={styles.orderItemText}>
+                  {item.dish.name} x{item.quantity}
+                </Text>
+              )}
+            />
           </View>
         </View>
         <Pressable

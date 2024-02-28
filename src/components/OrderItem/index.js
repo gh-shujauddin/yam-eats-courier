@@ -1,11 +1,31 @@
-import { Image, StyleSheet, Text, View, Pressable } from "react-native";
+import {
+  Image,
+  StyleSheet,
+  Text,
+  View,
+  Pressable,
+  ActivityIndicator,
+} from "react-native";
 import { Entypo } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
-import orders from "../../../assets/data/orders.json";
+import { DataStore } from "aws-amplify/datastore";
+import { Restaurant, User } from "../../models";
+import { useEffect, useState } from "react";
 
 export default function OrderItem({ order }) {
+  const [restaurant, setRestaurant] = useState(null);
+  const [user, setUser] = useState(null);
+
   const navigation = useNavigation();
 
+  useEffect(() => {
+    DataStore.query(Restaurant, order.restaurantID).then(setRestaurant);
+    DataStore.query(User, order.userID).then(setUser);
+  }, []);
+
+  if (!restaurant || !user) {
+    return <ActivityIndicator size={"large"} style={{ flex: 1 }} />;
+  }
   return (
     <Pressable
       style={{
@@ -21,17 +41,17 @@ export default function OrderItem({ order }) {
       }
     >
       <Image
-        source={{ uri: order.Restaurant.image }}
+        source={{ uri: restaurant.image }}
         style={{ height: "100%", width: "25%" }}
       />
       <View style={{ flex: 1, marginLeft: 10, paddingVertical: 5 }}>
         <Text style={{ fontSize: 18, fontWeight: "500" }}>
-          {order.Restaurant.name}
+          {restaurant.name}
         </Text>
-        <Text style={{ color: "grey" }}>{order.Restaurant.address}</Text>
+        <Text style={{ color: "grey" }}>{restaurant.address}</Text>
         <Text style={{ marginTop: 10 }}>Delivery details:</Text>
-        <Text style={{ color: "grey" }}>{order.User.name}</Text>
-        <Text style={{ color: "grey" }}>{order.User.address}</Text>
+        <Text style={{ color: "grey" }}>{user.name}</Text>
+        <Text style={{ color: "grey" }}>{user.address}</Text>
       </View>
       <View
         style={{
