@@ -45,6 +45,20 @@ const OrderContextProvider = ({ children }) => {
     }
   };
 
+  useEffect(() => {
+    if (!order) {
+      return;
+    }
+    const subscription = DataStore.observe(Order, order.id).subscribe(
+      ({ opType, element }) => {
+        if (opType === "UPDATE") {
+          fetchOrder(element.id);
+        }
+      }
+    );
+    return () => subscription.unsubscribe();
+  }, [order?.id]);
+
   const acceptOrder = () => {
     // update the order and change status and assign the driver to the order
     DataStore.save(
@@ -63,18 +77,28 @@ const OrderContextProvider = ({ children }) => {
       })
     ).then(setOrder);
   };
-  const completeOrder = () => {
+  const completeOrder = async () => {
     // update the order and change status
-    DataStore.save(
+    const updatedOrder = await DataStore.save(
       Order.copyOf(order, (updated) => {
         updated.status = "COMPLETED";
       })
-    ).then(setOrder);
+    );
+    setOrder(updatedOrder);
   };
 
   return (
     <OrderContext.Provider
-      value={{ order, user, restaurant, dishes, acceptOrder, fetchOrder, pickUpOrder, completeOrder }}
+      value={{
+        order,
+        user,
+        restaurant,
+        dishes,
+        acceptOrder,
+        fetchOrder,
+        pickUpOrder,
+        completeOrder,
+      }}
     >
       {children}
     </OrderContext.Provider>

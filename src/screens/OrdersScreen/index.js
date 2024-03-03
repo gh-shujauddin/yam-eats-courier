@@ -16,6 +16,7 @@ import { DataStore } from "aws-amplify/datastore";
 import { Order, OrderStatus, Restaurant } from "../../models";
 import orders from "../../../assets/data/orders.json";
 import OrderItem from "../../components/OrderItem";
+import CustomMarker from "../../components/CutomMarker";
 
 const OrdersScreen = () => {
   const [orders, setOrders] = useState(null);
@@ -27,8 +28,8 @@ const OrdersScreen = () => {
   const snapPoints = useMemo(() => ["12%", "90%"], []);
 
   const { height, width } = useWindowDimensions();
+  const [driverLocation, setDriverLocation] = useState(null);
 
-  const [location, setLocation] = useState(null);
   const [mapRegion, setMapRegion] = useState({
     latitude: 28.6139,
     longitude: 77.209,
@@ -36,10 +37,21 @@ const OrdersScreen = () => {
     longitudeDelta: 0.005,
   });
 
-  useEffect(() => {
+  const fetchOrder = () => {
     DataStore.query(Order, (order) =>
       order.status.eq(OrderStatus.READY_FOR_PICKUP)
     ).then(setOrders);
+  };
+  useEffect(() => {
+    fetchOrder();
+    const subscription = DataStore.observe(Order).subscribe(
+      ({ opType, element }) => {
+        if (opType === "UPDATE") {
+          fetchOrder();
+        }
+      }
+    );
+    return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -58,53 +70,30 @@ const OrdersScreen = () => {
     fetchRestaurants();
   }, [orders]);
 
-  // useEffect(() => {
-  //   (async () => {
-  //     try {
-  //       let { status } = await Location.requestForegroundPermissionsAsync();
-  //       if (status !== "granted") {
-  //         console.log("Permission to access location was denied");
-  //         return;
-  //       }
+  useEffect(() => {
+    (async () => {
+      try {
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (!status) {
+          console.log("Permission revoked");
+          return;
+        }
+        let location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+          enableHighAccuracy: true,
+          timeInterval: 5,
+        });
+        setDriverLocation({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+      } catch (e) {
+        console.log("Error fetch location: ", e);
+      }
+    })();
+  }, []);
 
-  //       let location = await Location.getCurrentPositionAsync({
-  //         accuracy: Location.Accuracy.Balanced,
-  //         enableHighAccuracy: true,
-  //         timeInterval: 5,
-  //       });
-  //       setLocation(location);
-  //       if (location) {
-  //         setMapRegion({
-  //           latitude: location.coords.latitude,
-  //           longitude: location.coords.longitude,
-  //           latitudeDelta: 0.005,
-  //           longitudeDelta: 0.005,
-  //         });
-  //       }
-  //       goToMyLocation();
-  //     } catch (error) {
-  //       console.log("Error fetching location: ", error);
-  //     }
-  //   })();
-  // }, []);
-
-  // const goToMyLocation = async () => {
-  //   try {
-  //     let r = {
-  //       latitude: mapRegion.latitude,
-  //       longitude: mapRegion.longitude,
-  //       latitudeDelta: 0.005,
-  //       longitudeDelta:
-  //         (Dimensions.get("window").width / Dimensions.get("window").height) *
-  //         0.522,
-  //     };
-  //     mapRef.current.animateToRegion(r, 1000);
-  //   } catch (error) {
-  //     console.log("Error moving to user: ", error);
-  //   }
-  // };
-
-  if (!mapRegion || !orders || !restaurants) {
+  if (!mapRegion || !orders || !restaurants || !driverLocation) {
     return <ActivityIndicator style={{ flex: 1 }} size={"large"} />;
   }
 
@@ -119,31 +108,17 @@ const OrdersScreen = () => {
         }}
         showsUserLocation
         followsUserLocation
-        showsMyLocationButton={true}
-        // onMapReady={() => goToMyLocation()}
         provider={PROVIDER_GOOGLE}
+        initialRegion={{
+          latitude: driverLocation.latitude,
+          longitude: driverLocation.longitude,
+          latitudeDelta: 0.07,
+          longitudeDelta: 0.07,
+        }}
       >
         {restaurants.map((restaurant, index) => {
           return (
-            <Marker
-              key={index}
-              title={restaurant.name}
-              description={restaurant.address}
-              coordinate={{
-                latitude: restaurant.lat,
-                longitude: restaurant.lng,
-              }}
-            >
-              <View
-                style={{
-                  backgroundColor: "green",
-                  padding: 5,
-                  borderRadius: 20,
-                }}
-              >
-                <Entypo name="shop" size={24} color={"white"} />
-              </View>
-            </Marker>
+            <CustomMarker key={index} data={restaurant} type="RESTAURANT" />
           );
         })}
       </MapView>

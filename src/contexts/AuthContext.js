@@ -9,6 +9,7 @@ const AuthContext = createContext({});
 const AuthContextProvider = ({ children }) => {
   const [authUser, setAuthUser] = useState(null);
   const [dbCourier, setDbCourier] = useState(null);
+  const [loading, setLoading] = useState(true);
   const sub = authUser?.userId;
 
   useEffect(() => {
@@ -16,15 +17,28 @@ const AuthContextProvider = ({ children }) => {
   }, []);
 
   useEffect(() => {
-    DataStore.query(Courier, (cour) => cour.sub.eq(sub)).then((couriers) =>
-      setDbCourier(couriers[0])
-    );
+    if (!sub) return;
+    DataStore.query(Courier, (cour) => cour.sub.eq(sub)).then((couriers) => {
+      setDbCourier(couriers[0]);
+      setLoading(false);
+    });
   }, [sub]);
 
-  console.log(dbCourier);
-
+  useEffect(() => {
+    if (!dbCourier) return;
+    const subscription = DataStore.observe(Courier, dbCourier.id).subscribe(
+      (msg) => {
+        if (msg.opType === "UPDATE") {
+          setDbCourier(msg.element);
+        }
+      }
+    );
+    return () => subscription.unsubscribe();
+  }, [dbCourier]);
   return (
-    <AuthContext.Provider value={{ authUser, dbCourier, sub, setDbCourier }}>
+    <AuthContext.Provider
+      value={{ authUser, dbCourier, sub, setDbCourier, loading }}
+    >
       {children}
     </AuthContext.Provider>
   );
