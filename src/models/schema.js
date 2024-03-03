@@ -944,6 +944,7 @@ export const schema = {
                 "NEW",
                 "COOKING",
                 "READY_FOR_PICKUP",
+                "ACCEPTED",
                 "PICKED_UP",
                 "COMPLETED"
             ]

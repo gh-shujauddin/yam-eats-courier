@@ -11,6 +11,7 @@ const OrderStatus = {
   "NEW": "NEW",
   "COOKING": "COOKING",
   "READY_FOR_PICKUP": "READY_FOR_PICKUP",
+  "ACCEPTED": "ACCEPTED",
   "PICKED_UP": "PICKED_UP",
   "COMPLETED": "COMPLETED"
 };

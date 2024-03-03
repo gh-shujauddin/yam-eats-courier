@@ -6,7 +6,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Amplify } from "aws-amplify";
 import { withAuthenticator } from "@aws-amplify/ui-react-native";
 import AuthContextProvider from "./src/contexts/AuthContext";
-
+import OrderContextProvider from "./src/contexts/OrderContext";
 import amplifyConfig from "./src/amplifyconfiguration.json";
 
 Amplify.configure({
@@ -19,7 +19,9 @@ function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <NavigationContainer>
         <AuthContextProvider>
-          <Navigation />
+          <OrderContextProvider>
+            <Navigation />
+          </OrderContextProvider>
         </AuthContextProvider>
         <StatusBar style="auto" />
       </NavigationContainer>

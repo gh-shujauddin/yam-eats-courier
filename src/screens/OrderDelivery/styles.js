@@ -25,6 +25,7 @@ const styles = StyleSheet.create({
   },
   deliveryDetailContainer: {
     paddingHorizontal: 20,
+    flex: 1,
   },
   addressContainer: {
     flexDirection: "row",
@@ -42,6 +43,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: "lightgrey",
     paddingTop: 20,
+    flex: 1,
   },
   orderItemText: {
     fontSize: 18,
